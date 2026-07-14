@@ -47,7 +47,7 @@
                 ? `${r.nombre_servicio} (Cuota ${r.numero_cuota} de ${r.total_parcialidades})`
                 : r.nombre_servicio;
               const mensaje = `Hola *${r.cliente_nombre}*, te compartimos el recibo de tu servicio:\n\nConcepto: *${concepto}*\nMonto: *$${Number(r.monto).toFixed(2)}*\nEstado: *${r.estado === 'pagado' ? 'Pagado' : 'Pendiente'}*\n\n¡Muchas gracias!`;
-              const mensajeConfirmacion = `Hola *${r.cliente_nombre}*, confirmamos tu pago:\n\nConcepto: *${concepto}*\nMonto: *$${Number(r.monto).toFixed(2)}*\nEstado: *Pagado* ✅\n\n¡Gracias por tu preferencia!`;
+              const mensajeConfirmacion = `Hola *${r.cliente_nombre}*, confirmamos tu pago:\n\nConcepto: *${concepto}*\nMonto: *$${Number(r.monto).toFixed(2)}*\nEstado: *Pagado* \n\n¡Gracias por tu preferencia!`;
               const numero = String(r.cliente_whatsapp).replace(/[^0-9]/g, '');
               const urlWhatsapp = `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
               const urlConfirmacion = `https://wa.me/${numero}?text=${encodeURIComponent(mensajeConfirmacion)}`;
