@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <%- include('partials/head', { titulo: 'Clientes · Gestor de Recibos' }) %>
+</head>
+<body class="bg-brand-50 min-h-screen">
+  <%- include('partials/nav', { activo: 'clientes', usuario, flash }) %>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-xl font-semibold text-brand-900">Clientes</h1>
+        <p class="text-sm text-brand-500"><%= clientes.length %> cliente(s) registrado(s)</p>
+      </div>
+      <button onclick="document.getElementById('form-cliente').classList.toggle('hidden')"
+              class="bg-brand-700 hover:bg-brand-800 text-white text-sm font-medium rounded-md px-4 py-2 transition-colors">
+        + Nuevo cliente
+      </button>
+    </div>
+
+    <div id="form-cliente" class="hidden bg-white border border-brand-100 rounded-xl shadow-sm p-6 mb-6">
+      <h2 class="text-sm font-semibold text-brand-800 mb-4">Nuevo cliente</h2>
+      <form action="/clientes" method="POST" class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-brand-700 mb-1">Nombre</label>
+          <input type="text" name="nombre" required class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-brand-700 mb-1">WhatsApp (con código de país)</label>
+          <input type="text" name="whatsapp" placeholder="5219871234567" required class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-brand-700 mb-1">Dirección</label>
+          <textarea name="direccion" rows="2" class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"></textarea>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-brand-700 mb-1">Notas</label>
+          <textarea name="notas" rows="2" class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"></textarea>
+        </div>
+        <div class="sm:col-span-2 flex justify-end gap-2">
+          <button type="button" onclick="document.getElementById('form-cliente').classList.add('hidden')"
+                  class="px-4 py-2 text-sm font-medium text-brand-600 hover:text-brand-800">Cancelar</button>
+          <button type="submit" class="px-4 py-2 text-sm font-medium bg-brand-700 hover:bg-brand-800 text-white rounded-md">Guardar</button>
+        </div>
+      </form>
+    </div>
+
+    <% if (clientes.length === 0) { %>
+      <div class="text-center py-16 text-brand-400 text-sm">Aún no hay clientes registrados.</div>
+    <% } else { %>
+      <div class="bg-white border border-brand-100 rounded-xl shadow-sm overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-brand-50 text-brand-600 text-left">
+            <tr>
+              <th class="px-4 py-3 font-medium">Nombre</th>
+              <th class="px-4 py-3 font-medium hidden sm:table-cell">WhatsApp</th>
+              <th class="px-4 py-3 font-medium hidden md:table-cell">Servicios activos</th>
+              <th class="px-4 py-3 font-medium text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-brand-100">
+            <% clientes.forEach(c => { %>
+              <tr class="hover:bg-brand-50/60">
+                <td class="px-4 py-3">
+                  <a href="/clientes/<%= c.id %>" class="font-medium text-brand-800 hover:text-brand-600"><%= c.nombre %></a>
+                </td>
+                <td class="px-4 py-3 text-brand-600 hidden sm:table-cell"><%= c.whatsapp %></td>
+                <td class="px-4 py-3 hidden md:table-cell">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-brand-700">
+                    <%= c.servicios_activos %>
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <a href="/clientes/<%= c.id %>" class="text-brand-600 hover:text-brand-800 text-sm font-medium mr-3">Ver</a>
+                  <form action="/clientes/<%= c.id %>/eliminar" method="POST" class="inline"
+                        onsubmit="return confirm('¿Eliminar a <%= c.nombre %>? Esto también eliminará sus servicios y recibos.')">
+                    <button class="text-red-600 hover:text-red-800 text-sm font-medium">Eliminar</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </main>
+</body>
+</html>

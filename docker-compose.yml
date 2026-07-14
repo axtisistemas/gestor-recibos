@@ -1,0 +1,22 @@
+services:
+  gestor-recibos:
+    build: .
+    container_name: gestor_recibos
+    environment:
+      DB_HOST: mariadb_web
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: gestor_recibos
+      SESSION_SECRET: ${SESSION_SECRET}
+      PORT: 3000
+    ports:
+      - "8085:3000"
+    networks:
+      - db_network
+    restart: unless-stopped
+
+networks:
+  db_network:
+    name: ${DB_NETWORK}
+    external: true

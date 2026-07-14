@@ -1,0 +1,43 @@
+<nav class="bg-brand-800 text-white">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6">
+    <div class="flex items-center justify-between h-16">
+      <div class="flex items-center gap-8">
+        <a href="/clientes" class="font-semibold text-lg tracking-tight">Gestor de Recibos</a>
+        <div class="hidden sm:flex gap-1">
+          <a href="/clientes"
+             class="px-3 py-2 rounded-md text-sm font-medium <%= activo === 'clientes' ? 'bg-brand-700 text-white' : 'text-brand-100 hover:bg-brand-700/60' %>">
+            Clientes
+          </a>
+          <a href="/recibos"
+             class="px-3 py-2 rounded-md text-sm font-medium <%= activo === 'recibos' ? 'bg-brand-700 text-white' : 'text-brand-100 hover:bg-brand-700/60' %>">
+            Recibos
+          </a>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <span class="hidden sm:inline text-sm text-brand-200"><%= usuario ? usuario.username : '' %></span>
+        <form action="/logout" method="POST">
+          <button class="text-sm font-medium text-brand-100 hover:text-white">Salir</button>
+        </form>
+      </div>
+    </div>
+    <div class="flex sm:hidden gap-1 pb-3">
+      <a href="/clientes"
+         class="px-3 py-1.5 rounded-md text-sm font-medium <%= activo === 'clientes' ? 'bg-brand-700 text-white' : 'text-brand-100' %>">
+        Clientes
+      </a>
+      <a href="/recibos"
+         class="px-3 py-1.5 rounded-md text-sm font-medium <%= activo === 'recibos' ? 'bg-brand-700 text-white' : 'text-brand-100' %>">
+        Recibos
+      </a>
+    </div>
+  </div>
+</nav>
+
+<% if (flash) { %>
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 mt-4">
+    <div class="rounded-md px-4 py-3 text-sm font-medium <%= flash.tipo === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-brand-50 text-brand-700 border border-brand-200' %>">
+      <%= flash.mensaje %>
+    </div>
+  </div>
+<% } %>

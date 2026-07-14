@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <%- include('partials/head', { titulo: cliente.nombre + ' · Gestor de Recibos' }) %>
+</head>
+<body class="bg-brand-50 min-h-screen">
+  <%- include('partials/nav', { activo: 'clientes', usuario, flash }) %>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <a href="/clientes" class="text-sm text-brand-600 hover:text-brand-800">&larr; Volver a clientes</a>
+
+    <!-- Datos del cliente -->
+    <div class="bg-white border border-brand-100 rounded-xl shadow-sm p-6">
+      <h2 class="text-sm font-semibold text-brand-800 mb-4">Datos del cliente</h2>
+      <form action="/clientes/<%= cliente.id %>/actualizar" method="POST" class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-brand-700 mb-1">Nombre</label>
+          <input type="text" name="nombre" value="<%= cliente.nombre %>" required
+                 class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-brand-700 mb-1">WhatsApp</label>
+          <input type="text" name="whatsapp" value="<%= cliente.whatsapp %>" required
+                 class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-brand-700 mb-1">Dirección</label>
+          <textarea name="direccion" rows="2" class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"><%= cliente.direccion || '' %></textarea>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-brand-700 mb-1">Notas</label>
+          <textarea name="notas" rows="2" class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"><%= cliente.notas || '' %></textarea>
+        </div>
+        <div class="sm:col-span-2 flex justify-end">
+          <button type="submit" class="px-4 py-2 text-sm font-medium bg-brand-700 hover:bg-brand-800 text-white rounded-md">
+            Guardar cambios
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Servicios contratados -->
+    <div class="bg-white border border-brand-100 rounded-xl shadow-sm p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-brand-800">Servicios / planes contratados</h2>
+        <button onclick="document.getElementById('form-servicio').classList.toggle('hidden')"
+                class="text-sm font-medium bg-brand-700 hover:bg-brand-800 text-white rounded-md px-3 py-1.5">
+          + Agregar servicio
+        </button>
+      </div>
+
+      <form id="form-servicio" action="/clientes/<%= cliente.id %>/servicios" method="POST"
+            class="hidden grid sm:grid-cols-2 gap-4 border border-brand-100 rounded-lg p-4 mb-5 bg-brand-50/60">
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-brand-700 mb-1">Nombre del servicio</label>
+          <input type="text" name="nombre_servicio" required placeholder="Ej. Hosting, Mantenimiento web..."
+                 class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-brand-700 mb-1">Tipo de cobro</label>
+          <select name="tipo" id="tipo-servicio" onchange="actualizarCamposServicio()" required
+                  class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <option value="unico">Pago único</option>
+            <option value="recurrente">Recurrente (mensual indefinido)</option>
+            <option value="parcialidad">A parcialidades</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-brand-700 mb-1">Monto por cobro</label>
+          <input type="number" step="0.01" min="0" name="monto" required
+                 class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+
+        <div id="campo-parcialidades" class="hidden">
+          <label class="block text-sm font-medium text-brand-700 mb-1">Número total de parcialidades</label>
+          <input type="number" min="1" name="total_parcialidades"
+                 class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+
+        <div id="campo-dia-cobro" class="hidden">
+          <label class="block text-sm font-medium text-brand-700 mb-1">Día del mes para cobrar (1-31)</label>
+          <input type="number" min="1" max="31" name="dia_cobro_mensual"
+                 class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+
+        <div class="sm:col-span-2 flex justify-end gap-2">
+          <button type="button" onclick="document.getElementById('form-servicio').classList.add('hidden')"
+                  class="px-4 py-2 text-sm font-medium text-brand-600 hover:text-brand-800">Cancelar</button>
+          <button type="submit" class="px-4 py-2 text-sm font-medium bg-brand-700 hover:bg-brand-800 text-white rounded-md">Guardar servicio</button>
+        </div>
+      </form>
+
+      <% if (servicios.length === 0) { %>
+        <div class="text-center py-10 text-brand-400 text-sm">Este cliente aún no tiene servicios contratados.</div>
+      <% } else { %>
+        <div class="divide-y divide-brand-100">
+          <% servicios.forEach(s => { %>
+            <div class="py-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-brand-800"><%= s.nombre_servicio %></span>
+                  <span class="text-xs px-2 py-0.5 rounded-full font-medium
+                    <%= s.tipo === 'unico' ? 'bg-slate-100 text-slate-600' : s.tipo === 'recurrente' ? 'bg-brand-100 text-brand-700' : 'bg-amber-100 text-amber-700' %>">
+                    <%= s.tipo === 'unico' ? 'Pago único' : s.tipo === 'recurrente' ? 'Recurrente' : 'Parcialidad' %>
+                  </span>
+                  <% if (!s.activo) { %>
+                    <span class="text-xs px-2 py-0.5 rounded-full font-medium bg-red-50 text-red-500">Inactivo</span>
+                  <% } %>
+                </div>
+                <div class="text-sm text-brand-500 mt-1">
+                  $<%= Number(s.monto).toFixed(2) %>
+                  <% if (s.tipo === 'parcialidad') { %>
+                    &middot; Cuota <%= s.parcialidades_pagadas %> de <%= s.total_parcialidades %>
+                  <% } %>
+                  <% if (s.dia_cobro_mensual) { %>
+                    &middot; Se cobra el día <%= s.dia_cobro_mensual %> de cada mes
+                  <% } %>
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <% if (s.tipo !== 'unico') { %>
+                  <form action="/servicios/<%= s.id %>/toggle" method="POST">
+                    <button class="text-sm font-medium text-brand-600 hover:text-brand-800">
+                      <%= s.activo ? 'Pausar' : 'Reactivar' %>
+                    </button>
+                  </form>
+                <% } %>
+                <form action="/servicios/<%= s.id %>/eliminar" method="POST"
+                      onsubmit="return confirm('¿Eliminar este servicio y su historial de recibos?')">
+                  <button class="text-sm font-medium text-red-600 hover:text-red-800">Eliminar</button>
+                </form>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+    </div>
+  </main>
+
+  <script>
+    function actualizarCamposServicio() {
+      const tipo = document.getElementById('tipo-servicio').value;
+      document.getElementById('campo-parcialidades').classList.toggle('hidden', tipo !== 'parcialidad');
+      document.getElementById('campo-dia-cobro').classList.toggle('hidden', tipo === 'unico');
+    }
+    actualizarCamposServicio();
+  </script>
+</body>
+</html>

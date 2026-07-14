@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <%- include('partials/head', { titulo: 'Recibos · Gestor de Recibos' }) %>
+</head>
+<body class="bg-brand-50 min-h-screen">
+  <%- include('partials/nav', { activo: 'recibos', usuario, flash }) %>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div>
+        <h1 class="text-xl font-semibold text-brand-900">Recibos</h1>
+        <p class="text-sm text-brand-500"><%= recibos.length %> recibo(s)</p>
+      </div>
+      <form action="/recibos/verificar-cobros" method="POST">
+        <button type="submit"
+                class="bg-brand-800 hover:bg-brand-900 text-white text-sm font-medium rounded-md px-4 py-2 transition-colors">
+          Verificar cobros del día
+        </button>
+      </form>
+    </div>
+
+    <div class="flex gap-2 mb-5">
+      <a href="/recibos" class="px-3 py-1.5 rounded-md text-sm font-medium <%= !filtro ? 'bg-brand-700 text-white' : 'bg-white border border-brand-200 text-brand-600' %>">Todos</a>
+      <a href="/recibos?estado=pendiente" class="px-3 py-1.5 rounded-md text-sm font-medium <%= filtro === 'pendiente' ? 'bg-brand-700 text-white' : 'bg-white border border-brand-200 text-brand-600' %>">Pendientes</a>
+      <a href="/recibos?estado=pagado" class="px-3 py-1.5 rounded-md text-sm font-medium <%= filtro === 'pagado' ? 'bg-brand-700 text-white' : 'bg-white border border-brand-200 text-brand-600' %>">Pagados</a>
+    </div>
+
+    <% if (recibos.length === 0) { %>
+      <div class="text-center py-16 text-brand-400 text-sm">No hay recibos para mostrar.</div>
+    <% } else { %>
+      <div class="bg-white border border-brand-100 rounded-xl shadow-sm overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-brand-50 text-brand-600 text-left">
+            <tr>
+              <th class="px-4 py-3 font-medium">Cliente</th>
+              <th class="px-4 py-3 font-medium hidden sm:table-cell">Servicio</th>
+              <th class="px-4 py-3 font-medium">Monto</th>
+              <th class="px-4 py-3 font-medium hidden md:table-cell">Fecha</th>
+              <th class="px-4 py-3 font-medium">Estado</th>
+              <th class="px-4 py-3 font-medium text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-brand-100">
+            <% recibos.forEach(r => {
+              const concepto = r.tipo === 'parcialidad'
+                ? `${r.nombre_servicio} (Cuota ${r.numero_cuota} de ${r.total_parcialidades})`
+                : r.nombre_servicio;
+              const mensaje = `Hola *${r.cliente_nombre}*, te compartimos el recibo de tu servicio:\n\nConcepto: *${concepto}*\nMonto: *$${Number(r.monto).toFixed(2)}*\nEstado: *${r.estado === 'pagado' ? 'Pagado' : 'Pendiente'}*\n\n¡Muchas gracias!`;
+              const numero = String(r.cliente_whatsapp).replace(/[^0-9]/g, '');
+              const urlWhatsapp = `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
+            %>
+              <tr class="hover:bg-brand-50/60">
+                <td class="px-4 py-3">
+                  <a href="/clientes/<%= r.cliente_id %>" class="font-medium text-brand-800 hover:text-brand-600"><%= r.cliente_nombre %></a>
+                </td>
+                <td class="px-4 py-3 text-brand-600 hidden sm:table-cell"><%= concepto %></td>
+                <td class="px-4 py-3 font-medium text-brand-800">$<%= Number(r.monto).toFixed(2) %></td>
+                <td class="px-4 py-3 text-brand-500 hidden md:table-cell"><%= r.fecha_emision %></td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                    <%= r.estado === 'pagado' ? 'bg-brand-100 text-brand-700' : 'bg-amber-100 text-amber-700' %>">
+                    <%= r.estado === 'pagado' ? 'Pagado' : 'Pendiente' %>
+                  </span>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center justify-end gap-2">
+                    <% if (r.estado === 'pendiente') { %>
+                      <a href="<%= urlWhatsapp %>" target="_blank" rel="noopener"
+                         class="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md px-3 py-1.5 transition-colors">
+                        Enviar por WhatsApp
+                      </a>
+                      <form action="/recibos/<%= r.id %>/marcar-pagado" method="POST">
+                        <button class="text-xs font-medium text-brand-600 hover:text-brand-800 border border-brand-200 rounded-md px-3 py-1.5">
+                          Marcar pagado
+                        </button>
+                      </form>
+                    <% } else { %>
+                      <form action="/recibos/<%= r.id %>/marcar-pendiente" method="POST">
+                        <button class="text-xs font-medium text-brand-500 hover:text-brand-700">
+                          Reabrir
+                        </button>
+                      </form>
+                    <% } %>
+                  </div>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </main>
+</body>
+</html>

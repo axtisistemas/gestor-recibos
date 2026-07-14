@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <%- include('partials/head', { titulo: 'Iniciar sesión · Gestor de Recibos' }) %>
+</head>
+<body class="bg-brand-50 min-h-screen flex items-center justify-center px-4">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-700 text-white text-xl font-bold mb-4">$</div>
+      <h1 class="text-2xl font-semibold text-brand-900">Gestor de Recibos</h1>
+      <p class="text-sm text-brand-500 mt-1">Acceso solo para administradores</p>
+    </div>
+
+    <form action="/login" method="POST" class="bg-white rounded-xl border border-brand-100 shadow-sm p-6 space-y-4">
+      <% if (error) { %>
+        <div class="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">
+          <%= error %>
+        </div>
+      <% } %>
+
+      <div>
+        <label class="block text-sm font-medium text-brand-800 mb-1">Usuario</label>
+        <input type="text" name="username" required autofocus
+               class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-brand-800 mb-1">Contraseña</label>
+        <input type="password" name="password" required
+               class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" />
+      </div>
+
+      <button type="submit"
+              class="w-full bg-brand-700 hover:bg-brand-800 text-white font-medium rounded-md py-2 text-sm transition-colors">
+        Entrar
+      </button>
+    </form>
+  </div>
+</body>
+</html>
