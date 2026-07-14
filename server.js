@@ -46,11 +46,61 @@ function setFlash(req, tipo, mensaje) {
 
 // ---------------------------------------------------------------------
 // Lógica de facturación (generación de recibos recurrentes / parcialidades)
+// Los recibos se generan DIAS_ANTICIPACION días antes de la fecha de
+// vencimiento (día de cobro mensual del servicio), no el mismo día.
 // ---------------------------------------------------------------------
+const DIAS_ANTICIPACION = 10;
+
+function inicioDelDia(fecha) {
+  const f = new Date(fecha);
+  f.setHours(0, 0, 0, 0);
+  return f;
+}
+
+function formatoFecha(fecha) {
+  return fecha.toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+function ultimoDiaDelMes(anio, mesIndex0) {
+  return new Date(anio, mesIndex0 + 1, 0).getDate();
+}
+
+// Calcula la fecha de vencimiento de un mes/año dado, ajustando el día
+// si el mes no tiene suficientes días (ej. día 31 en febrero -> día 28/29).
+function fechaVencimientoEnMes(diaCobro, anio, mesIndex0) {
+  const dia = Math.min(diaCobro, ultimoDiaDelMes(anio, mesIndex0));
+  return new Date(anio, mesIndex0, dia);
+}
+
+function sumarDias(fecha, dias) {
+  const f = new Date(fecha);
+  f.setDate(f.getDate() + dias);
+  return f;
+}
+
+// Busca el próximo ciclo de cobro (fecha de vencimiento) de un servicio que
+// todavía no tenga un recibo generado. Revisa hasta 3 meses hacia adelante
+// como margen de seguridad por si el sistema estuvo un tiempo sin revisarse.
+async function proximoCicloPendiente(servicio, hoy) {
+  let cursor = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+
+  for (let i = 0; i < 3; i++) {
+    const vencimiento = fechaVencimientoEnMes(servicio.dia_cobro_mensual, cursor.getFullYear(), cursor.getMonth());
+    const [existentes] = await pool.query(
+      `SELECT id FROM recibos_emitidos WHERE servicio_id = ? AND fecha_vencimiento = ?`,
+      [servicio.id, formatoFecha(vencimiento)]
+    );
+    if (existentes.length === 0) {
+      return vencimiento;
+    }
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+  }
+  return null;
+}
+
 async function verificarCobrosDelDia() {
-  const hoy = new Date();
-  const diaHoy = hoy.getDate();
-  const fechaHoy = hoy.toISOString().slice(0, 10); // YYYY-MM-DD
+  const hoy = inicioDelDia(new Date());
+  const fechaHoy = formatoFecha(hoy);
 
   const resumen = { generados: 0, finalizados: 0, omitidos: 0 };
 
@@ -58,57 +108,54 @@ async function verificarCobrosDelDia() {
     `SELECT * FROM servicios_contratados
      WHERE activo = 1
        AND tipo IN ('recurrente', 'parcialidad')
-       AND dia_cobro_mensual = ?`,
-    [diaHoy]
+       AND dia_cobro_mensual IS NOT NULL`
   );
 
   for (const servicio of servicios) {
-    // Evita duplicar el recibo si ya se generó hoy para este servicio
-    const [existentes] = await pool.query(
-      `SELECT id FROM recibos_emitidos WHERE servicio_id = ? AND fecha_emision = ?`,
-      [servicio.id, fechaHoy]
-    );
-    if (existentes.length > 0) {
+    if (servicio.tipo === 'parcialidad' && servicio.parcialidades_pagadas >= servicio.total_parcialidades) {
+      await pool.query(`UPDATE servicios_contratados SET activo = 0 WHERE id = ?`, [servicio.id]);
+      resumen.finalizados++;
+      continue;
+    }
+
+    const vencimiento = await proximoCicloPendiente(servicio, hoy);
+    if (!vencimiento) {
       resumen.omitidos++;
       continue;
     }
 
-    if (servicio.tipo === 'parcialidad') {
-      if (servicio.parcialidades_pagadas >= servicio.total_parcialidades) {
-        // Ya se cubrieron todas las cuotas: se desactiva y no se genera recibo
-        await pool.query(
-          `UPDATE servicios_contratados SET activo = 0 WHERE id = ?`,
-          [servicio.id]
-        );
-        resumen.finalizados++;
-        continue;
-      }
+    const fechaGeneracion = inicioDelDia(sumarDias(vencimiento, -DIAS_ANTICIPACION));
 
+    if (hoy < fechaGeneracion) {
+      // Aún no es momento de generar el recibo de este ciclo
+      resumen.omitidos++;
+      continue;
+    }
+
+    const fechaVencimientoStr = formatoFecha(vencimiento);
+
+    if (servicio.tipo === 'parcialidad') {
       const nuevaCuota = servicio.parcialidades_pagadas + 1;
 
       await pool.query(
-        `INSERT INTO recibos_emitidos (servicio_id, cliente_id, monto, numero_cuota, fecha_emision, estado)
-         VALUES (?, ?, ?, ?, ?, 'pendiente')`,
-        [servicio.id, servicio.cliente_id, servicio.monto, nuevaCuota, fechaHoy]
+        `INSERT INTO recibos_emitidos (servicio_id, cliente_id, monto, numero_cuota, fecha_emision, fecha_vencimiento, estado)
+         VALUES (?, ?, ?, ?, ?, ?, 'pendiente')`,
+        [servicio.id, servicio.cliente_id, servicio.monto, nuevaCuota, fechaHoy, fechaVencimientoStr]
       );
 
-      const pagadasActualizadas = nuevaCuota;
-      const sigueActivo = pagadasActualizadas < servicio.total_parcialidades ? 1 : 0;
-
+      const sigueActivo = nuevaCuota < servicio.total_parcialidades ? 1 : 0;
       await pool.query(
-        `UPDATE servicios_contratados
-         SET parcialidades_pagadas = ?, activo = ?
-         WHERE id = ?`,
-        [pagadasActualizadas, sigueActivo, servicio.id]
+        `UPDATE servicios_contratados SET parcialidades_pagadas = ?, activo = ? WHERE id = ?`,
+        [nuevaCuota, sigueActivo, servicio.id]
       );
 
       resumen.generados++;
       if (!sigueActivo) resumen.finalizados++;
-    } else if (servicio.tipo === 'recurrente') {
+    } else {
       await pool.query(
-        `INSERT INTO recibos_emitidos (servicio_id, cliente_id, monto, numero_cuota, fecha_emision, estado)
-         VALUES (?, ?, ?, NULL, ?, 'pendiente')`,
-        [servicio.id, servicio.cliente_id, servicio.monto, fechaHoy]
+        `INSERT INTO recibos_emitidos (servicio_id, cliente_id, monto, numero_cuota, fecha_emision, fecha_vencimiento, estado)
+         VALUES (?, ?, ?, NULL, ?, ?, 'pendiente')`,
+        [servicio.id, servicio.cliente_id, servicio.monto, fechaHoy, fechaVencimientoStr]
       );
       resumen.generados++;
     }
@@ -242,12 +289,12 @@ app.post('/clientes/:id/servicios', requireAuth, async (req, res) => {
   const servicioId = result.insertId;
 
   if (tipo === 'unico') {
-    // Se genera el recibo inmediatamente
+    // Se genera el recibo inmediatamente, con vencimiento el mismo día
     const fechaHoy = new Date().toISOString().slice(0, 10);
     await pool.query(
-      `INSERT INTO recibos_emitidos (servicio_id, cliente_id, monto, numero_cuota, fecha_emision, estado)
-       VALUES (?, ?, ?, NULL, ?, 'pendiente')`,
-      [servicioId, clienteId, monto, fechaHoy]
+      `INSERT INTO recibos_emitidos (servicio_id, cliente_id, monto, numero_cuota, fecha_emision, fecha_vencimiento, estado)
+       VALUES (?, ?, ?, NULL, ?, ?, 'pendiente')`,
+      [servicioId, clienteId, monto, fechaHoy, fechaHoy]
     );
     // Un servicio único queda inactivo porque ya se cobró
     await pool.query(`UPDATE servicios_contratados SET activo = 0 WHERE id = ?`, [servicioId]);
@@ -290,7 +337,7 @@ app.get('/recibos', requireAuth, async (req, res) => {
     sql += ' WHERE r.estado = ?';
     params.push(filtro);
   }
-  sql += ' ORDER BY r.fecha_emision DESC, r.id DESC';
+  sql += ' ORDER BY r.fecha_vencimiento ASC, r.id DESC';
 
   const [recibos] = await pool.query(sql, params);
 
