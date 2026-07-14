@@ -47,8 +47,10 @@
                 ? `${r.nombre_servicio} (Cuota ${r.numero_cuota} de ${r.total_parcialidades})`
                 : r.nombre_servicio;
               const mensaje = `Hola *${r.cliente_nombre}*, te compartimos el recibo de tu servicio:\n\nConcepto: *${concepto}*\nMonto: *$${Number(r.monto).toFixed(2)}*\nEstado: *${r.estado === 'pagado' ? 'Pagado' : 'Pendiente'}*\n\n¡Muchas gracias!`;
+              const mensajeConfirmacion = `Hola *${r.cliente_nombre}*, confirmamos tu pago:\n\nConcepto: *${concepto}*\nMonto: *$${Number(r.monto).toFixed(2)}*\nEstado: *Pagado* ✅\n\n¡Gracias por tu preferencia!`;
               const numero = String(r.cliente_whatsapp).replace(/[^0-9]/g, '');
               const urlWhatsapp = `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
+              const urlConfirmacion = `https://wa.me/${numero}?text=${encodeURIComponent(mensajeConfirmacion)}`;
             %>
               <tr class="hover:bg-brand-50/60">
                 <td class="px-4 py-3">
@@ -76,6 +78,10 @@
                         </button>
                       </form>
                     <% } else { %>
+                      <a href="<%= urlConfirmacion %>" target="_blank" rel="noopener"
+                         class="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md px-3 py-1.5 transition-colors">
+                        Confirmar pago por WhatsApp
+                      </a>
                       <form action="/recibos/<%= r.id %>/marcar-pendiente" method="POST">
                         <button class="text-xs font-medium text-brand-500 hover:text-brand-700">
                           Reabrir
