@@ -75,7 +75,7 @@
                 etiquetaBoton = 'Enviar aviso VENCIDO';
               }
 
-              const mensajeConfirmacion = `Hola *${r.cliente_nombre}*, confirmamos tu pago:\n\nConcepto: *${concepto}*\nMonto: *${montoTexto}*\nEstado: *Pagado* ✅\n\n¡Gracias por tu preferencia!`;
+              const mensajeConfirmacion = `Hola *${r.cliente_nombre}*, confirmamos tu pago:\n\nConcepto: *${concepto}*\nMonto: *${montoTexto}*\nEstado: *Pagado* \n\n¡Gracias por tu preferencia!`;
 
               const numero = String(r.cliente_whatsapp).replace(/[^0-9]/g, '');
               const urlWhatsapp = `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
