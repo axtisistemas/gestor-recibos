@@ -36,18 +36,47 @@
               <th class="px-4 py-3 font-medium">Cliente</th>
               <th class="px-4 py-3 font-medium hidden sm:table-cell">Servicio</th>
               <th class="px-4 py-3 font-medium">Monto</th>
-              <th class="px-4 py-3 font-medium hidden md:table-cell">Fecha</th>
+              <th class="px-4 py-3 font-medium hidden md:table-cell">Vence</th>
               <th class="px-4 py-3 font-medium">Estado</th>
               <th class="px-4 py-3 font-medium text-right">Acciones</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-brand-100">
+            <% const hoy = new Date(); hoy.setHours(0, 0, 0, 0); %>
             <% recibos.forEach(r => {
               const concepto = r.tipo === 'parcialidad'
                 ? `${r.nombre_servicio} (Cuota ${r.numero_cuota} de ${r.total_parcialidades})`
                 : r.nombre_servicio;
-              const mensaje = `Hola *${r.cliente_nombre}*, te compartimos el recibo de tu servicio:\n\nConcepto: *${concepto}*\nMonto: *$${Number(r.monto).toFixed(2)}*\nEstado: *${r.estado === 'pagado' ? 'Pagado' : 'Pendiente'}*\n\n¡Muchas gracias!`;
-              const mensajeConfirmacion = `Hola *${r.cliente_nombre}*, confirmamos tu pago:\n\nConcepto: *${concepto}*\nMonto: *$${Number(r.monto).toFixed(2)}*\nEstado: *Pagado* \n\n¡Gracias por tu preferencia!`;
+
+              const vencimiento = r.fecha_vencimiento ? new Date(r.fecha_vencimiento + 'T00:00:00') : null;
+              const diasParaVencer = vencimiento ? Math.round((vencimiento - hoy) / (1000 * 60 * 60 * 24)) : null;
+              const fechaVencimientoBonita = vencimiento
+                ? vencimiento.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+                : '';
+
+              let etapa = 'recordatorio1'; // 10+ días antes del vencimiento
+              if (diasParaVencer !== null) {
+                if (diasParaVencer < 0) etapa = 'vencido';
+                else if (diasParaVencer === 0) etapa = 'recordatorio2';
+              }
+
+              const montoTexto = `$${Number(r.monto).toFixed(2)}`;
+
+              let mensaje;
+              let etiquetaBoton;
+              if (etapa === 'recordatorio1') {
+                mensaje = `Hola *${r.cliente_nombre}*, \nTe compartimos el recibo de tu servicio.\n\n*Concepto:* ${concepto}\n*Monto:* ${montoTexto}\n*Estado:* Pendiente\n\nPor favor realizar el pago antes del ${fechaVencimientoBonita}.\nMuchas Gracias`;
+                etiquetaBoton = 'Enviar recordatorio';
+              } else if (etapa === 'recordatorio2') {
+                mensaje = `Hola *${r.cliente_nombre}*, \nTe recordamos que tu servicio *está a punto de vencer*, te compartimos los detalles:\n\n*Concepto:* ${concepto}\n*Monto:* ${montoTexto}\n*Estado:* Pendiente\n\nPor favor realizar el pago *hoy mismo*.\nMuchas Gracias`;
+                etiquetaBoton = 'Enviar aviso de vencimiento';
+              } else {
+                mensaje = `Hola *${r.cliente_nombre}*, \nTe recordamos que el recibo de tu servicio está *VENCIDO*.\n\n*Concepto:* ${concepto}\n*Monto:* ${montoTexto}\n*Estado:* Vencido\n\nPor favor realizar el pago *hoy mismo* y evita *recargos*.\nMuchas Gracias`;
+                etiquetaBoton = 'Enviar aviso VENCIDO';
+              }
+
+              const mensajeConfirmacion = `Hola *${r.cliente_nombre}*, confirmamos tu pago:\n\nConcepto: *${concepto}*\nMonto: *${montoTexto}*\nEstado: *Pagado* ✅\n\n¡Gracias por tu preferencia!`;
+
               const numero = String(r.cliente_whatsapp).replace(/[^0-9]/g, '');
               const urlWhatsapp = `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
               const urlConfirmacion = `https://wa.me/${numero}?text=${encodeURIComponent(mensajeConfirmacion)}`;
@@ -57,20 +86,28 @@
                   <a href="/clientes/<%= r.cliente_id %>" class="font-medium text-brand-800 hover:text-brand-600"><%= r.cliente_nombre %></a>
                 </td>
                 <td class="px-4 py-3 text-brand-600 hidden sm:table-cell"><%= concepto %></td>
-                <td class="px-4 py-3 font-medium text-brand-800">$<%= Number(r.monto).toFixed(2) %></td>
-                <td class="px-4 py-3 text-brand-500 hidden md:table-cell"><%= r.fecha_emision %></td>
+                <td class="px-4 py-3 font-medium text-brand-800"><%= montoTexto %></td>
+                <td class="px-4 py-3 hidden md:table-cell">
+                  <div class="text-brand-600"><%= vencimiento ? r.fecha_vencimiento : '—' %></div>
+                  <% if (r.estado === 'pendiente' && diasParaVencer !== null) { %>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mt-1
+                      <%= etapa === 'vencido' ? 'bg-red-100 text-red-700' : etapa === 'recordatorio2' ? 'bg-amber-200 text-amber-800' : 'bg-brand-100 text-brand-600' %>">
+                      <%= etapa === 'vencido' ? `Vencido hace ${Math.abs(diasParaVencer)} día(s)` : etapa === 'recordatorio2' ? 'Vence hoy' : `Vence en ${diasParaVencer} día(s)` %>
+                    </span>
+                  <% } %>
+                </td>
                 <td class="px-4 py-3">
                   <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-                    <%= r.estado === 'pagado' ? 'bg-brand-100 text-brand-700' : 'bg-amber-100 text-amber-700' %>">
-                    <%= r.estado === 'pagado' ? 'Pagado' : 'Pendiente' %>
+                    <%= r.estado === 'pagado' ? 'bg-brand-100 text-brand-700' : etapa === 'vencido' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700' %>">
+                    <%= r.estado === 'pagado' ? 'Pagado' : (etapa === 'vencido' ? 'Vencido' : 'Pendiente') %>
                   </span>
                 </td>
                 <td class="px-4 py-3">
                   <div class="flex items-center justify-end gap-2">
                     <% if (r.estado === 'pendiente') { %>
                       <a href="<%= urlWhatsapp %>" target="_blank" rel="noopener"
-                         class="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md px-3 py-1.5 transition-colors">
-                        Enviar por WhatsApp
+                         class="inline-flex items-center gap-1 <%= etapa === 'vencido' ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700' %> text-white text-xs font-semibold rounded-md px-3 py-1.5 transition-colors">
+                        <%= etiquetaBoton %>
                       </a>
                       <form action="/recibos/<%= r.id %>/marcar-pagado" method="POST">
                         <button class="text-xs font-medium text-brand-600 hover:text-brand-800 border border-brand-200 rounded-md px-3 py-1.5">
