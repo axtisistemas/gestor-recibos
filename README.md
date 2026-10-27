@@ -80,12 +80,24 @@ npm run dev
     control de "Cuota X de Y" y desactiva el servicio automáticamente al
     completarse.
 - **Recibos**: lista todos los recibos generados, con filtro por
-  pendientes/pagados. Cada recibo pendiente tiene un botón verde
-  **"Enviar por WhatsApp"** que abre `wa.me` con el mensaje ya redactado.
+  pendientes/pagados. Cada recibo pendiente tiene un botón de WhatsApp cuyo
+  texto cambia automáticamente según qué tan cerca esté del vencimiento:
+  - Más de 0 días antes del vencimiento → recordatorio 1 ("antes del [fecha]").
+  - El mismo día del vencimiento → recordatorio 2 ("hoy mismo").
+  - Después del vencimiento → aviso de vencido ("evita recargos").
 - **Verificar cobros del día**: botón en la pantalla de Recibos que revisa
   todos los servicios recurrentes/a parcialidades activos y genera el
-  recibo correspondiente si hoy coincide con su día de cobro. Es seguro
-  presionarlo varias veces: no duplica recibos ya generados el mismo día.
+  recibo correspondiente **10 días antes** de su fecha de vencimiento (día
+  de cobro mensual). Es seguro presionarlo varias veces: no duplica
+  recibos ya generados para el mismo ciclo.
+
+### Si vienes de una versión anterior (ya tenías el sistema instalado)
+
+Antes de esta actualización los recibos se generaban el mismo día del
+cobro. Ahora se generan 10 días antes, y cada recibo guarda también su
+`fecha_vencimiento`. Para actualizar una base de datos que ya está en uso,
+ejecuta una sola vez en phpMyAdmin el script `sql/migracion_recordatorios.sql`
+(no vuelvas a correr `sql/schema.sql`, ese es solo para instalaciones nuevas).
 
 ### Automatizarlo con un cron real (opcional)
 

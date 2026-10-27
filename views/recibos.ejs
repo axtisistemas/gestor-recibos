@@ -10,7 +10,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
       <div>
         <h1 class="text-xl font-semibold text-brand-900">Recibos</h1>
-        <p class="text-sm text-brand-500"><%= recibos.length %> recibo(s)</p>
+        <p class="text-sm text-brand-500"><span id="contador"><%= recibos.length %></span> recibo(s)</p>
       </div>
       <form action="/recibos/verificar-cobros" method="POST">
         <button type="submit"
@@ -20,24 +20,38 @@
       </form>
     </div>
 
-    <div class="flex gap-2 mb-5">
-      <a href="/recibos" class="px-3 py-1.5 rounded-md text-sm font-medium <%= !filtro ? 'bg-brand-700 text-white' : 'bg-white border border-brand-200 text-brand-600' %>">Todos</a>
-      <a href="/recibos?estado=pendiente" class="px-3 py-1.5 rounded-md text-sm font-medium <%= filtro === 'pendiente' ? 'bg-brand-700 text-white' : 'bg-white border border-brand-200 text-brand-600' %>">Pendientes</a>
-      <a href="/recibos?estado=pagado" class="px-3 py-1.5 rounded-md text-sm font-medium <%= filtro === 'pagado' ? 'bg-brand-700 text-white' : 'bg-white border border-brand-200 text-brand-600' %>">Pagados</a>
+    <div class="mb-5">
+      <input id="buscador" type="search" placeholder="Buscar cliente..." autocomplete="off"
+             class="w-full sm:w-80 rounded-md border border-brand-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
     </div>
 
     <% if (recibos.length === 0) { %>
       <div class="text-center py-16 text-brand-400 text-sm">No hay recibos para mostrar.</div>
     <% } else { %>
-      <div class="bg-white border border-brand-100 rounded-xl shadow-sm overflow-hidden">
-        <table class="w-full text-sm">
+      <div class="bg-white border border-brand-100 rounded-xl shadow-sm overflow-x-auto">
+        <table class="w-full text-sm" id="tabla-recibos">
           <thead class="bg-brand-50 text-brand-600 text-left">
             <tr>
-              <th class="px-4 py-3 font-medium">Cliente</th>
-              <th class="px-4 py-3 font-medium hidden sm:table-cell">Servicio</th>
-              <th class="px-4 py-3 font-medium">Monto</th>
-              <th class="px-4 py-3 font-medium hidden md:table-cell">Vence</th>
-              <th class="px-4 py-3 font-medium">Estado</th>
+              <th class="px-4 py-3 font-medium">
+                <button type="button" data-orden="cliente" class="inline-flex items-center gap-1 hover:text-brand-900">Cliente <span class="flecha text-xs"></span></button>
+              </th>
+              <th class="px-4 py-3 font-medium hidden sm:table-cell">
+                <button type="button" data-orden="servicio" class="inline-flex items-center gap-1 hover:text-brand-900">Servicio <span class="flecha text-xs"></span></button>
+              </th>
+              <th class="px-4 py-3 font-medium">
+                <button type="button" data-orden="monto" class="inline-flex items-center gap-1 hover:text-brand-900">Monto <span class="flecha text-xs"></span></button>
+              </th>
+              <th class="px-4 py-3 font-medium hidden md:table-cell">
+                <button type="button" data-orden="vence" class="inline-flex items-center gap-1 hover:text-brand-900">Vence <span class="flecha text-xs"></span></button>
+              </th>
+              <th class="px-4 py-3 font-medium">
+                <button type="button" data-orden="estado" class="inline-flex items-center gap-1 hover:text-brand-900">Estado <span class="flecha text-xs"></span></button>
+              </th>
+              <th class="px-4 py-3 font-medium text-center" title="Enviar por WhatsApp">
+                <svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 inline text-emerald-600" aria-label="WhatsApp">
+                  <path d="M6 4h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4V6a2 2 0 0 1 2-2z"/>
+                </svg>
+              </th>
               <th class="px-4 py-3 font-medium text-right">Acciones</th>
             </tr>
           </thead>
@@ -49,47 +63,71 @@
                 : r.nombre_servicio;
 
               const vencimiento = r.fecha_vencimiento ? new Date(r.fecha_vencimiento + 'T00:00:00') : null;
-              const diasParaVencer = vencimiento ? Math.round((vencimiento - hoy) / (1000 * 60 * 60 * 24)) : null;
+              const diasParaVencer = vencimiento ? Math.round((vencimiento - hoy) / 86400000) : null;
               const fechaVencimientoBonita = vencimiento
                 ? vencimiento.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
                 : '';
 
-              let etapa = 'recordatorio1'; // 10+ días antes del vencimiento
+              let etapa = 'recordatorio1';
               if (diasParaVencer !== null) {
                 if (diasParaVencer < 0) etapa = 'vencido';
                 else if (diasParaVencer === 0) etapa = 'recordatorio2';
               }
 
-              const montoTexto = `$${Number(r.monto).toFixed(2)}`;
+              const monto = Number(r.monto);
+              const abonado = Number(r.saldo_aplicado || 0);
+              const restante = Math.max(monto - abonado, 0);
+              const montoTexto = `$${monto.toFixed(2)}`;
+              const restanteTexto = `$${restante.toFixed(2)}`;
+              const lineaAbono = abonado > 0 ? `\n*Abonado:* $${abonado.toFixed(2)}` : '';
+
+              const pendiente = r.estado === 'pendiente';
+              const estadoTexto = !pendiente ? 'Pagado' : (etapa === 'vencido' ? 'Vencido' : 'Pendiente');
+              const estadoRango = !pendiente ? 1 : (etapa === 'vencido' ? 3 : 2);
 
               let mensaje;
-              let etiquetaBoton;
-              if (etapa === 'recordatorio1') {
-                mensaje = `Hola *${r.cliente_nombre}*, \nTe compartimos el recibo de tu servicio.\n\n*Concepto:* ${concepto}\n*Monto:* ${montoTexto}\n*Estado:* Pendiente\n\nPor favor realizar el pago antes del ${fechaVencimientoBonita}.\nMuchas Gracias`;
-                etiquetaBoton = 'Enviar recordatorio';
+              let tituloEnvio;
+              if (!pendiente) {
+                mensaje = `Hola *${r.cliente_nombre}*, confirmamos tu pago:\n\nConcepto: *${concepto}*\nMonto: *${montoTexto}*\nEstado: *Pagado* ✅\n\n¡Gracias por tu preferencia!`;
+                tituloEnvio = 'Enviar confirmación de pago';
+              } else if (etapa === 'recordatorio1') {
+                mensaje = `Hola *${r.cliente_nombre}*, \nTe compartimos el recibo de tu servicio.\n\n*Concepto:* ${concepto}\n*Monto:* ${restanteTexto}${lineaAbono}\n*Estado:* Pendiente\n\nPor favor realizar el pago antes del ${fechaVencimientoBonita}.\nMuchas Gracias`;
+                tituloEnvio = 'Enviar recordatorio';
               } else if (etapa === 'recordatorio2') {
-                mensaje = `Hola *${r.cliente_nombre}*, \nTe recordamos que tu servicio *está a punto de vencer*, te compartimos los detalles:\n\n*Concepto:* ${concepto}\n*Monto:* ${montoTexto}\n*Estado:* Pendiente\n\nPor favor realizar el pago *hoy mismo*.\nMuchas Gracias`;
-                etiquetaBoton = 'Enviar aviso de vencimiento';
+                mensaje = `Hola *${r.cliente_nombre}*, \nTe recordamos que tu servicio *está a punto de vencer*, te compartimos los detalles:\n\n*Concepto:* ${concepto}\n*Monto:* ${restanteTexto}${lineaAbono}\n*Estado:* Pendiente\n\nPor favor realizar el pago *hoy mismo*.\nMuchas Gracias`;
+                tituloEnvio = 'Enviar aviso: vence hoy';
               } else {
-                mensaje = `Hola *${r.cliente_nombre}*, \nTe recordamos que el recibo de tu servicio está *VENCIDO*.\n\n*Concepto:* ${concepto}\n*Monto:* ${montoTexto}\n*Estado:* Vencido\n\nPor favor realizar el pago *hoy mismo* y evita *recargos*.\nMuchas Gracias`;
-                etiquetaBoton = 'Enviar aviso VENCIDO';
+                mensaje = `Hola *${r.cliente_nombre}*, \nTe recordamos que el recibo de tu servicio está *VENCIDO*.\n\n*Concepto:* ${concepto}\n*Monto:* ${restanteTexto}${lineaAbono}\n*Estado:* Vencido\n\nPor favor realizar el pago *hoy mismo* y evita *recargos*.\nMuchas Gracias`;
+                tituloEnvio = 'Enviar aviso: vencido';
               }
 
-              const mensajeConfirmacion = `Hola *${r.cliente_nombre}*, confirmamos tu pago:\n\nConcepto: *${concepto}*\nMonto: *${montoTexto}*\nEstado: *Pagado* \n\n¡Gracias por tu preferencia!`;
+              const colorEnvio = !pendiente ? 'bg-emerald-600 hover:bg-emerald-700'
+                : etapa === 'vencido' ? 'bg-red-600 hover:bg-red-700'
+                : etapa === 'recordatorio2' ? 'bg-amber-500 hover:bg-amber-600'
+                : 'bg-emerald-600 hover:bg-emerald-700';
 
               const numero = String(r.cliente_whatsapp).replace(/[^0-9]/g, '');
               const urlWhatsapp = `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
-              const urlConfirmacion = `https://wa.me/${numero}?text=${encodeURIComponent(mensajeConfirmacion)}`;
             %>
-              <tr class="hover:bg-brand-50/60">
+              <tr class="hover:bg-brand-50/60"
+                  data-cliente="<%= r.cliente_nombre %>"
+                  data-servicio="<%= concepto %>"
+                  data-monto="<%= pendiente ? restante : monto %>"
+                  data-vence="<%= r.fecha_vencimiento || '' %>"
+                  data-estado="<%= estadoRango %>">
                 <td class="px-4 py-3">
                   <a href="/clientes/<%= r.cliente_id %>" class="font-medium text-brand-800 hover:text-brand-600"><%= r.cliente_nombre %></a>
                 </td>
                 <td class="px-4 py-3 text-brand-600 hidden sm:table-cell"><%= concepto %></td>
-                <td class="px-4 py-3 font-medium text-brand-800"><%= montoTexto %></td>
+                <td class="px-4 py-3">
+                  <div class="font-medium text-brand-800"><%= pendiente ? restanteTexto : montoTexto %></div>
+                  <% if (pendiente && abonado > 0) { %>
+                    <div class="text-xs text-brand-500">de <%= montoTexto %> (abonado $<%= abonado.toFixed(2) %>)</div>
+                  <% } %>
+                </td>
                 <td class="px-4 py-3 hidden md:table-cell">
-                  <div class="text-brand-600"><%= vencimiento ? r.fecha_vencimiento : '—' %></div>
-                  <% if (r.estado === 'pendiente' && diasParaVencer !== null) { %>
+                  <div class="text-brand-600"><%= r.fecha_vencimiento || '—' %></div>
+                  <% if (pendiente && diasParaVencer !== null) { %>
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mt-1
                       <%= etapa === 'vencido' ? 'bg-red-100 text-red-700' : etapa === 'recordatorio2' ? 'bg-amber-200 text-amber-800' : 'bg-brand-100 text-brand-600' %>">
                       <%= etapa === 'vencido' ? `Vencido hace ${Math.abs(diasParaVencer)} día(s)` : etapa === 'recordatorio2' ? 'Vence hoy' : `Vence en ${diasParaVencer} día(s)` %>
@@ -98,41 +136,114 @@
                 </td>
                 <td class="px-4 py-3">
                   <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-                    <%= r.estado === 'pagado' ? 'bg-brand-100 text-brand-700' : etapa === 'vencido' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700' %>">
-                    <%= r.estado === 'pagado' ? 'Pagado' : (etapa === 'vencido' ? 'Vencido' : 'Pendiente') %>
+                    <%= !pendiente ? 'bg-brand-100 text-brand-700' : etapa === 'vencido' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700' %>">
+                    <%= estadoTexto %>
                   </span>
                 </td>
-                <td class="px-4 py-3">
-                  <div class="flex items-center justify-end gap-2">
-                    <% if (r.estado === 'pendiente') { %>
-                      <a href="<%= urlWhatsapp %>" target="_blank" rel="noopener"
-                         class="inline-flex items-center gap-1 <%= etapa === 'vencido' ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700' %> text-white text-xs font-semibold rounded-md px-3 py-1.5 transition-colors">
-                        <%= etiquetaBoton %>
-                      </a>
-                      <form action="/recibos/<%= r.id %>/marcar-pagado" method="POST">
-                        <button class="text-xs font-medium text-brand-600 hover:text-brand-800 border border-brand-200 rounded-md px-3 py-1.5">
-                          Marcar pagado
-                        </button>
-                      </form>
-                    <% } else { %>
-                      <a href="<%= urlConfirmacion %>" target="_blank" rel="noopener"
-                         class="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md px-3 py-1.5 transition-colors">
-                        Confirmar pago por WhatsApp
-                      </a>
-                      <form action="/recibos/<%= r.id %>/marcar-pendiente" method="POST">
-                        <button class="text-xs font-medium text-brand-500 hover:text-brand-700">
-                          Reabrir
-                        </button>
-                      </form>
-                    <% } %>
-                  </div>
+                <td class="px-4 py-3 text-center">
+                  <a href="<%= urlWhatsapp %>" target="_blank" rel="noopener" title="<%= tituloEnvio %>"
+                     class="inline-flex items-center justify-center w-8 h-8 rounded-full text-white <%= colorEnvio %> transition-colors">
+                    <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4" aria-hidden="true">
+                      <path d="M3 11.5 21 3l-8.5 18-2.2-7.3L3 11.5z"/>
+                    </svg>
+                    <span class="sr-only"><%= tituloEnvio %></span>
+                  </a>
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <% if (pendiente) { %>
+                    <form action="/recibos/<%= r.id %>/pagar" method="POST" class="inline"
+                          onsubmit="return confirm('¿Marcar este recibo como pagado?')">
+                      <button class="text-xs font-semibold text-white bg-brand-700 hover:bg-brand-800 rounded-md px-3 py-1.5">Pagar</button>
+                    </form>
+                  <% } else { %>
+                    <form action="/recibos/<%= r.id %>/reabrir" method="POST" class="inline"
+                          onsubmit="return confirm('<%= abonado > 0 ? `¿Reabrir este recibo? Se devolverán $${abonado.toFixed(2)} al saldo a favor del cliente.` : '¿Reabrir este recibo?' %>')">
+                      <button class="text-xs font-medium text-brand-600 hover:text-brand-800 border border-brand-200 rounded-md px-3 py-1.5">Reabrir</button>
+                    </form>
+                  <% } %>
                 </td>
               </tr>
             <% }) %>
           </tbody>
         </table>
+        <div id="sin-resultados" class="hidden text-center py-10 text-brand-400 text-sm">No se encontraron recibos para esa búsqueda.</div>
       </div>
     <% } %>
   </main>
+
+  <script>
+    (function () {
+      const tabla = document.getElementById('tabla-recibos');
+      if (!tabla) return;
+      const tbody = tabla.querySelector('tbody');
+      const filas = Array.from(tbody.querySelectorAll('tr'));
+      const buscador = document.getElementById('buscador');
+      const contador = document.getElementById('contador');
+      const sinResultados = document.getElementById('sin-resultados');
+      const botones = document.querySelectorAll('[data-orden]');
+      const numericos = ['monto', 'estado'];
+
+      // Orden predeterminado: Vence descendente y luego Estado descendente
+      let orden = { campo: 'vence', dir: 'desc' };
+      try {
+        const guardado = JSON.parse(sessionStorage.getItem('recibos-orden'));
+        if (guardado && guardado.campo) orden = guardado;
+      } catch (e) {}
+      try { buscador.value = sessionStorage.getItem('recibos-busqueda') || ''; } catch (e) {}
+
+      const normalizar = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const valor = (fila, campo) => numericos.includes(campo) ? Number(fila.dataset[campo]) : normalizar(fila.dataset[campo]);
+
+      function comparar(a, b, campo, dir) {
+        const va = valor(a, campo), vb = valor(b, campo);
+        if (va < vb) return dir === 'asc' ? -1 : 1;
+        if (va > vb) return dir === 'asc' ? 1 : -1;
+        return 0;
+      }
+
+      function ordenar() {
+        filas.sort((a, b) =>
+          comparar(a, b, orden.campo, orden.dir) ||
+          (orden.campo !== 'vence' ? comparar(a, b, 'vence', 'desc') : 0) ||
+          (orden.campo !== 'estado' ? comparar(a, b, 'estado', 'desc') : 0)
+        );
+        filas.forEach((f) => tbody.appendChild(f));
+        botones.forEach((b) => {
+          b.querySelector('.flecha').textContent = b.dataset.orden === orden.campo ? (orden.dir === 'asc' ? '▲' : '▼') : '';
+        });
+      }
+
+      function filtrar() {
+        const q = normalizar(buscador.value.trim());
+        let visibles = 0;
+        filas.forEach((f) => {
+          const coincide = !q || normalizar(f.dataset.cliente).includes(q);
+          f.classList.toggle('hidden', !coincide);
+          if (coincide) visibles++;
+        });
+        contador.textContent = visibles;
+        sinResultados.classList.toggle('hidden', visibles > 0);
+      }
+
+      botones.forEach((b) =>
+        b.addEventListener('click', () => {
+          const campo = b.dataset.orden;
+          orden = orden.campo === campo
+            ? { campo, dir: orden.dir === 'asc' ? 'desc' : 'asc' }
+            : { campo, dir: campo === 'cliente' || campo === 'servicio' ? 'asc' : 'desc' };
+          try { sessionStorage.setItem('recibos-orden', JSON.stringify(orden)); } catch (e) {}
+          ordenar();
+        })
+      );
+
+      buscador.addEventListener('input', () => {
+        try { sessionStorage.setItem('recibos-busqueda', buscador.value); } catch (e) {}
+        filtrar();
+      });
+
+      ordenar();
+      filtrar();
+    })();
+  </script>
 </body>
 </html>

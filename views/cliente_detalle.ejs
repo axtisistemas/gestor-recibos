@@ -6,37 +6,79 @@
 <body class="bg-brand-50 min-h-screen">
   <%- include('partials/nav', { activo: 'clientes', usuario, flash }) %>
 
+  <%
+    const etiquetaFrecuencia = { diaria: 'Diario', semanal: 'Semanal', quincenal: 'Quincenal', mensual: 'Mensual' };
+    const inputClase = 'w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500';
+  %>
+
   <main class="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
     <a href="/clientes" class="text-sm text-brand-600 hover:text-brand-800">&larr; Volver a clientes</a>
 
-    <!-- Datos del cliente -->
-    <div class="bg-white border border-brand-100 rounded-xl shadow-sm p-6">
-      <h2 class="text-sm font-semibold text-brand-800 mb-4">Datos del cliente</h2>
-      <form action="/clientes/<%= cliente.id %>/actualizar" method="POST" class="grid sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-brand-700 mb-1">Nombre</label>
-          <input type="text" name="nombre" value="<%= cliente.nombre %>" required
-                 class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+    <div class="grid lg:grid-cols-3 gap-6">
+      <!-- Datos del cliente -->
+      <div class="lg:col-span-2 bg-white border border-brand-100 rounded-xl shadow-sm p-6">
+        <h2 class="text-sm font-semibold text-brand-800 mb-4">Datos del cliente</h2>
+        <form action="/clientes/<%= cliente.id %>/actualizar" method="POST" class="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-brand-700 mb-1">Nombre</label>
+            <input type="text" name="nombre" value="<%= cliente.nombre %>" required class="<%= inputClase %>" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-brand-700 mb-1">WhatsApp</label>
+            <input type="text" name="whatsapp" value="<%= cliente.whatsapp %>" required class="<%= inputClase %>" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-sm font-medium text-brand-700 mb-1">Dirección</label>
+            <textarea name="direccion" rows="2" class="<%= inputClase %>"><%= cliente.direccion || '' %></textarea>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-sm font-medium text-brand-700 mb-1">Notas</label>
+            <textarea name="notas" rows="2" class="<%= inputClase %>"><%= cliente.notas || '' %></textarea>
+          </div>
+          <div class="sm:col-span-2 flex justify-end">
+            <button type="submit" class="px-4 py-2 text-sm font-medium bg-brand-700 hover:bg-brand-800 text-white rounded-md">Guardar cambios</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Saldo a favor -->
+      <div class="bg-white border border-brand-100 rounded-xl shadow-sm p-6">
+        <h2 class="text-sm font-semibold text-brand-800 mb-4">Saldo del cliente</h2>
+        <div class="grid grid-cols-2 gap-3 mb-5">
+          <div class="rounded-lg bg-brand-50 p-3">
+            <div class="text-xs text-brand-500">Saldo a favor</div>
+            <div class="text-lg font-semibold text-brand-800">$<%= Number(cliente.saldo_favor || 0).toFixed(2) %></div>
+          </div>
+          <div class="rounded-lg <%= adeudo > 0 ? 'bg-amber-50' : 'bg-brand-50' %> p-3">
+            <div class="text-xs <%= adeudo > 0 ? 'text-amber-700' : 'text-brand-500' %>">Adeudo pendiente</div>
+            <div class="text-lg font-semibold <%= adeudo > 0 ? 'text-amber-800' : 'text-brand-800' %>">$<%= adeudo.toFixed(2) %></div>
+          </div>
         </div>
-        <div>
-          <label class="block text-sm font-medium text-brand-700 mb-1">WhatsApp</label>
-          <input type="text" name="whatsapp" value="<%= cliente.whatsapp %>" required
-                 class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-        </div>
-        <div class="sm:col-span-2">
-          <label class="block text-sm font-medium text-brand-700 mb-1">Dirección</label>
-          <textarea name="direccion" rows="2" class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"><%= cliente.direccion || '' %></textarea>
-        </div>
-        <div class="sm:col-span-2">
-          <label class="block text-sm font-medium text-brand-700 mb-1">Notas</label>
-          <textarea name="notas" rows="2" class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"><%= cliente.notas || '' %></textarea>
-        </div>
-        <div class="sm:col-span-2 flex justify-end">
-          <button type="submit" class="px-4 py-2 text-sm font-medium bg-brand-700 hover:bg-brand-800 text-white rounded-md">
-            Guardar cambios
-          </button>
-        </div>
-      </form>
+
+        <form action="/clientes/<%= cliente.id %>/abonos" method="POST" class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-brand-700 mb-1">Registrar abono / adelanto</label>
+            <input type="number" step="0.01" min="0.01" name="monto" required placeholder="Monto" class="<%= inputClase %>" />
+          </div>
+          <input type="text" name="nota" maxlength="255" placeholder="Nota (opcional), ej. transferencia" class="<%= inputClase %>" />
+          <button type="submit" class="w-full px-4 py-2 text-sm font-medium bg-brand-700 hover:bg-brand-800 text-white rounded-md">Agregar abono</button>
+          <p class="text-xs text-brand-500">El abono se aplica automáticamente a los recibos pendientes más antiguos. Lo que sobre queda como saldo a favor para los siguientes recibos.</p>
+        </form>
+
+        <% if (abonos.length > 0) { %>
+          <div class="mt-5 border-t border-brand-100 pt-4">
+            <h3 class="text-xs font-semibold text-brand-600 uppercase tracking-wide mb-2">Últimos abonos</h3>
+            <ul class="space-y-2 text-sm">
+              <% abonos.forEach(a => { %>
+                <li class="flex justify-between gap-2">
+                  <span class="text-brand-600"><%= a.fecha %><% if (a.nota) { %> · <span class="text-brand-500"><%= a.nota %></span><% } %></span>
+                  <span class="font-medium text-brand-800">$<%= Number(a.monto).toFixed(2) %></span>
+                </li>
+              <% }) %>
+            </ul>
+          </div>
+        <% } %>
+      </div>
     </div>
 
     <!-- Servicios contratados -->
@@ -53,14 +95,12 @@
             class="hidden grid sm:grid-cols-2 gap-4 border border-brand-100 rounded-lg p-4 mb-5 bg-brand-50/60">
         <div class="sm:col-span-2">
           <label class="block text-sm font-medium text-brand-700 mb-1">Nombre del servicio</label>
-          <input type="text" name="nombre_servicio" required placeholder="Ej. Hosting, Mantenimiento web..."
-                 class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <input type="text" name="nombre_servicio" required placeholder="Ej. Hosting, Mantenimiento web..." class="<%= inputClase %>" />
         </div>
 
         <div>
           <label class="block text-sm font-medium text-brand-700 mb-1">Tipo de cobro</label>
-          <select name="tipo" id="tipo-servicio" onchange="actualizarCamposServicio()" required
-                  class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+          <select name="tipo" id="tipo-servicio" required class="<%= inputClase %>">
             <option value="unico">Pago único</option>
             <option value="recurrente">Recurrente (mensual indefinido)</option>
             <option value="parcialidad">A parcialidades</option>
@@ -69,20 +109,32 @@
 
         <div>
           <label class="block text-sm font-medium text-brand-700 mb-1">Monto por cobro</label>
-          <input type="number" step="0.01" min="0" name="monto" required
-                 class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <input type="number" step="0.01" min="0.01" name="monto" required class="<%= inputClase %>" />
+        </div>
+
+        <div id="campo-frecuencia" class="hidden">
+          <label class="block text-sm font-medium text-brand-700 mb-1">Frecuencia de pago</label>
+          <select name="frecuencia" id="frecuencia-servicio" class="<%= inputClase %>">
+            <option value="mensual">Mensual</option>
+            <option value="quincenal">Quincenal (cada 15 días)</option>
+            <option value="semanal">Semanal</option>
+            <option value="diaria">Diario</option>
+          </select>
         </div>
 
         <div id="campo-parcialidades" class="hidden">
           <label class="block text-sm font-medium text-brand-700 mb-1">Número total de parcialidades</label>
-          <input type="number" min="1" name="total_parcialidades"
-                 class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <input type="number" min="1" name="total_parcialidades" id="input-parcialidades" class="<%= inputClase %>" />
         </div>
 
         <div id="campo-dia-cobro" class="hidden">
           <label class="block text-sm font-medium text-brand-700 mb-1">Día del mes para cobrar (1-31)</label>
-          <input type="number" min="1" max="31" name="dia_cobro_mensual"
-                 class="w-full rounded-md border border-brand-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <input type="number" min="1" max="31" name="dia_cobro_mensual" id="input-dia-cobro" class="<%= inputClase %>" />
+        </div>
+
+        <div id="campo-fecha-inicio" class="hidden">
+          <label class="block text-sm font-medium text-brand-700 mb-1">Fecha de la primera cuota</label>
+          <input type="date" name="fecha_inicio" id="input-fecha-inicio" value="<%= hoy %>" class="<%= inputClase %>" />
         </div>
 
         <div class="sm:col-span-2 flex justify-end gap-2">
@@ -96,14 +148,16 @@
         <div class="text-center py-10 text-brand-400 text-sm">Este cliente aún no tiene servicios contratados.</div>
       <% } else { %>
         <div class="divide-y divide-brand-100">
-          <% servicios.forEach(s => { %>
+          <% servicios.forEach(s => {
+            const frecuencia = s.tipo === 'parcialidad' ? (s.frecuencia || 'mensual') : 'mensual';
+          %>
             <div class="py-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2">
                   <span class="font-medium text-brand-800"><%= s.nombre_servicio %></span>
                   <span class="text-xs px-2 py-0.5 rounded-full font-medium
                     <%= s.tipo === 'unico' ? 'bg-slate-100 text-slate-600' : s.tipo === 'recurrente' ? 'bg-brand-100 text-brand-700' : 'bg-amber-100 text-amber-700' %>">
-                    <%= s.tipo === 'unico' ? 'Pago único' : s.tipo === 'recurrente' ? 'Recurrente' : 'Parcialidad' %>
+                    <%= s.tipo === 'unico' ? 'Pago único' : s.tipo === 'recurrente' ? 'Recurrente' : 'Parcialidad · ' + etiquetaFrecuencia[frecuencia] %>
                   </span>
                   <% if (!s.activo) { %>
                     <span class="text-xs px-2 py-0.5 rounded-full font-medium bg-red-50 text-red-500">Inactivo</span>
@@ -114,17 +168,17 @@
                   <% if (s.tipo === 'parcialidad') { %>
                     &middot; Cuota <%= s.parcialidades_pagadas %> de <%= s.total_parcialidades %>
                   <% } %>
-                  <% if (s.dia_cobro_mensual) { %>
-                    &middot; Se cobra el día <%= s.dia_cobro_mensual %> de cada mes
+                  <% if (s.tipo !== 'unico' && frecuencia === 'mensual' && s.dia_cobro_mensual) { %>
+                    &middot; Vence el día <%= s.dia_cobro_mensual %> de cada mes
+                  <% } else if (s.tipo === 'parcialidad' && s.fecha_inicio) { %>
+                    &middot; Primera cuota: <%= s.fecha_inicio %>
                   <% } %>
                 </div>
               </div>
               <div class="flex items-center gap-3">
                 <% if (s.tipo !== 'unico') { %>
                   <form action="/servicios/<%= s.id %>/toggle" method="POST">
-                    <button class="text-sm font-medium text-brand-600 hover:text-brand-800">
-                      <%= s.activo ? 'Pausar' : 'Reactivar' %>
-                    </button>
+                    <button class="text-sm font-medium text-brand-600 hover:text-brand-800"><%= s.activo ? 'Pausar' : 'Reactivar' %></button>
                   </form>
                 <% } %>
                 <form action="/servicios/<%= s.id %>/eliminar" method="POST"
@@ -140,12 +194,31 @@
   </main>
 
   <script>
-    function actualizarCamposServicio() {
-      const tipo = document.getElementById('tipo-servicio').value;
-      document.getElementById('campo-parcialidades').classList.toggle('hidden', tipo !== 'parcialidad');
-      document.getElementById('campo-dia-cobro').classList.toggle('hidden', tipo === 'unico');
-    }
-    actualizarCamposServicio();
+    (function () {
+      const tipo = document.getElementById('tipo-servicio');
+      const frecuencia = document.getElementById('frecuencia-servicio');
+      const mostrar = (id, visible) => document.getElementById(id).classList.toggle('hidden', !visible);
+
+      function actualizar() {
+        const esParcialidad = tipo.value === 'parcialidad';
+        const esMensual = !esParcialidad || frecuencia.value === 'mensual';
+        const usaDia = tipo.value !== 'unico' && esMensual;
+        const usaFechaInicio = esParcialidad && !esMensual;
+
+        mostrar('campo-frecuencia', esParcialidad);
+        mostrar('campo-parcialidades', esParcialidad);
+        mostrar('campo-dia-cobro', usaDia);
+        mostrar('campo-fecha-inicio', usaFechaInicio);
+
+        document.getElementById('input-parcialidades').required = esParcialidad;
+        document.getElementById('input-dia-cobro').required = usaDia;
+        document.getElementById('input-fecha-inicio').required = usaFechaInicio;
+      }
+
+      tipo.addEventListener('change', actualizar);
+      frecuencia.addEventListener('change', actualizar);
+      actualizar();
+    })();
   </script>
 </body>
 </html>

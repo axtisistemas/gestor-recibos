@@ -55,6 +55,7 @@
               <th class="px-4 py-3 font-medium">Nombre</th>
               <th class="px-4 py-3 font-medium hidden sm:table-cell">WhatsApp</th>
               <th class="px-4 py-3 font-medium hidden md:table-cell">Servicios activos</th>
+              <th class="px-4 py-3 font-medium hidden md:table-cell">Saldo a favor</th>
               <th class="px-4 py-3 font-medium text-right">Acciones</th>
             </tr>
           </thead>
@@ -69,6 +70,9 @@
                   <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-brand-700">
                     <%= c.servicios_activos %>
                   </span>
+                </td>
+                <td class="px-4 py-3 hidden md:table-cell text-brand-700">
+                  <%= Number(c.saldo_favor || 0) > 0 ? '$' + Number(c.saldo_favor).toFixed(2) : '—' %>
                 </td>
                 <td class="px-4 py-3 text-right">
                   <a href="/clientes/<%= c.id %>" class="text-brand-600 hover:text-brand-800 text-sm font-medium mr-3">Ver</a>

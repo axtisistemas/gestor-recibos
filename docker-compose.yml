@@ -10,6 +10,7 @@ services:
       DB_NAME: gestor_recibos
       SESSION_SECRET: ${SESSION_SECRET}
       PORT: 3000
+      TZ: America/Mexico_City
     ports:
       - "8085:3000"
     networks:
