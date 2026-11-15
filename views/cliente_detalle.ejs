@@ -55,6 +55,21 @@
           </div>
         </div>
 
+        <% if (cliente.axtipay_cuenta_url) {
+             const msgCuenta = `Hola *${cliente.nombre}*, te compartimos el link para liquidar tu saldo pendiente de *$${Number(cliente.axtipay_cuenta_monto).toFixed(2)}*.\n\nPuedes pagar con tarjeta, transferencia o CoDi:\n${cliente.axtipay_cuenta_url}\n\nMuchas Gracias`;
+             const waCuenta = `https://wa.me/${String(cliente.whatsapp).replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msgCuenta)}`; %>
+          <div class="rounded-lg border border-brand-100 p-3 mb-5">
+            <div class="text-xs text-brand-500 mb-1">Link para pagar todo el adeudo</div>
+            <div class="text-sm font-medium text-brand-800 break-all mb-2"><%= cliente.axtipay_cuenta_url.replace(/^https?:\/\//, '') %></div>
+            <div class="flex gap-2">
+              <button type="button" onclick="navigator.clipboard.writeText('<%= cliente.axtipay_cuenta_url %>').then(() => { this.textContent = 'Copiado'; setTimeout(() => this.textContent = 'Copiar link', 1500); })"
+                      class="flex-1 text-xs font-medium border border-brand-200 text-brand-700 hover:border-brand-400 rounded-md px-3 py-1.5">Copiar link</button>
+              <a href="<%= waCuenta %>" target="_blank" rel="noopener"
+                 class="flex-1 text-center text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md px-3 py-1.5">Enviar por WhatsApp</a>
+            </div>
+          </div>
+        <% } %>
+
         <form action="/clientes/<%= cliente.id %>/abonos" method="POST" class="space-y-3">
           <div>
             <label class="block text-sm font-medium text-brand-700 mb-1">Registrar abono / adelanto</label>

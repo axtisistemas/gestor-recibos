@@ -4,6 +4,7 @@ const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const pool = require('./db');
+const axtipay = require('./axtipay');
 
 const app = express();
 
@@ -11,7 +12,8 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+// Se guarda el cuerpo original para verificar la firma de los avisos de AxtiPay
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); } }));
 
 app.use(
   session({
@@ -256,6 +258,110 @@ async function verificarCobrosDelDia() {
 }
 
 // ---------------------------------------------------------------------
+// AxtiPay: registrar un pago recibido
+// Se guarda como abono del cliente (queda en su historial). Si el pago vino del
+// link de un recibo, se aplica primero a ese recibo; lo demás se aplica a los
+// pendientes más antiguos, y si sobra queda como saldo a favor.
+// ---------------------------------------------------------------------
+async function registrarPagoAxtipay(evento) {
+  const ref = axtipay.parseReferencia(evento.external_ref);
+  if (!ref) throw new Error('Referencia no reconocida: ' + evento.external_ref);
+  const monto = aCentavos(evento.amount);
+  if (!(monto > 0)) throw new Error('Monto no válido.');
+  const referencia = `axtipay:${evento.transaction_id || evento.code}`.slice(0, 100);
+  const metodo = { tarjeta: 'tarjeta', transferencia: 'transferencia', codi: 'CoDi', efectivo: 'efectivo', terminal: 'terminal' }[evento.paid_method] || evento.paid_method || 'pago';
+
+  const conn = await pool.getConnection();
+  let clienteId;
+  try {
+    await conn.beginTransaction();
+
+    // Aviso repetido: ese pago ya se registró
+    const [[repetido]] = await conn.query('SELECT id FROM abonos_cliente WHERE referencia = ?', [referencia]);
+    if (repetido) {
+      await conn.commit();
+      return { duplicado: true };
+    }
+
+    let recibo = null;
+    if (ref.tipo === 'R') {
+      [[recibo]] = await conn.query('SELECT * FROM recibos_emitidos WHERE id = ? FOR UPDATE', [ref.id]);
+      if (!recibo) throw new Error('El recibo ' + ref.id + ' no existe.');
+      clienteId = recibo.cliente_id;
+    } else {
+      const [[cliente]] = await conn.query('SELECT id FROM clientes WHERE id = ? FOR UPDATE', [ref.id]);
+      if (!cliente) throw new Error('El cliente ' + ref.id + ' no existe.');
+      clienteId = cliente.id;
+    }
+
+    const nota = ref.tipo === 'R'
+      ? `AxtiPay · ${metodo} · recibo #${ref.id}`
+      : `AxtiPay · ${metodo} · saldo total`;
+    await conn.query('INSERT INTO abonos_cliente (cliente_id, monto, nota, fecha, referencia) VALUES (?, ?, ?, ?, ?)', [
+      clienteId, deCentavos(monto), nota, formatoFecha(new Date()), referencia,
+    ]);
+
+    let saldo = monto;
+    if (recibo && recibo.estado === 'pendiente') {
+      const yaAplicado = aCentavos(recibo.saldo_aplicado);
+      const restante = aCentavos(recibo.monto) - yaAplicado;
+      const aplicar = Math.min(saldo, Math.max(restante, 0));
+      if (aplicar > 0) {
+        await conn.query('UPDATE recibos_emitidos SET saldo_aplicado = ?, estado = ? WHERE id = ?', [
+          deCentavos(yaAplicado + aplicar),
+          aplicar >= restante ? 'pagado' : 'pendiente',
+          recibo.id,
+        ]);
+        saldo -= aplicar;
+      }
+    }
+    if (saldo > 0) {
+      await conn.query('UPDATE clientes SET saldo_favor = saldo_favor + ? WHERE id = ?', [deCentavos(saldo), clienteId]);
+    }
+
+    // El link que se pagó ya terminó: el siguiente cobro usará uno nuevo
+    if (ref.tipo === 'R') {
+      await conn.query(
+        'UPDATE recibos_emitidos SET axtipay_url = NULL, axtipay_monto = NULL, axtipay_seq = axtipay_seq + 1 WHERE id = ? AND axtipay_seq = ?',
+        [ref.id, ref.seq]
+      );
+    } else {
+      await conn.query(
+        'UPDATE clientes SET axtipay_cuenta_url = NULL, axtipay_cuenta_monto = NULL, axtipay_seq = axtipay_seq + 1 WHERE id = ? AND axtipay_seq = ?',
+        [ref.id, ref.seq]
+      );
+    }
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+
+  await aplicarSaldoFavor(clienteId);
+  return { clienteId };
+}
+
+app.post('/api/axtipay/webhook', ruta(async (req, res) => {
+  if (!axtipay.verificarFirma(req.rawBody || '', req.get('x-axtipay-signature'))) {
+    return res.status(401).json({ ok: false, error: 'Firma no válida.' });
+  }
+  const evento = req.body || {};
+  if (evento.event === 'ping') return res.json({ ok: true, pong: true });
+  if (evento.event !== 'link.paid') return res.status(400).json({ ok: false, error: 'Evento no soportado.' });
+
+  try {
+    const resultado = await registrarPagoAxtipay(evento);
+    res.json({ ok: true, ...resultado });
+    axtipay.sincronizarEnSegundoPlano(pool);
+  } catch (err) {
+    console.error('[axtipay] webhook:', err.message);
+    res.status(422).json({ ok: false, error: err.message });
+  }
+}));
+
+// ---------------------------------------------------------------------
 // Autenticación
 // ---------------------------------------------------------------------
 app.get('/login', (req, res) => {
@@ -327,7 +433,23 @@ app.post('/clientes/:id/actualizar', requireAuth, ruta(async (req, res) => {
   res.redirect('/clientes/' + req.params.id);
 }));
 
+// Referencias de AxtiPay activas de un cliente o servicio, para cancelarlas antes de borrar
+async function linksActivos({ clienteId, servicioId }) {
+  const campo = clienteId ? 'cliente_id' : 'servicio_id';
+  const [recibos] = await pool.query(
+    `SELECT id, axtipay_seq FROM recibos_emitidos WHERE ${campo} = ? AND axtipay_url IS NOT NULL`,
+    [clienteId || servicioId]
+  );
+  const refs = recibos.map((r) => `R-${r.id}-${r.axtipay_seq}`);
+  if (clienteId) {
+    const [[c]] = await pool.query('SELECT axtipay_cuenta_url, axtipay_seq FROM clientes WHERE id = ?', [clienteId]);
+    if (c && c.axtipay_cuenta_url) refs.push(`C-${clienteId}-${c.axtipay_seq}`);
+  }
+  return refs;
+}
+
 app.post('/clientes/:id/eliminar', requireAuth, ruta(async (req, res) => {
+  await axtipay.cancelarLinks(await linksActivos({ clienteId: req.params.id }));
   await pool.query('DELETE FROM clientes WHERE id = ?', [req.params.id]);
   setFlash(req, 'ok', 'Cliente eliminado.');
   res.redirect('/clientes');
@@ -378,6 +500,7 @@ app.post('/clientes/:id/abonos', requireAuth, ruta(async (req, res) => {
   await pool.query('UPDATE clientes SET saldo_favor = saldo_favor + ? WHERE id = ?', [monto.toFixed(2), clienteId]);
 
   const aplicado = await aplicarSaldoFavor(clienteId);
+  await axtipay.sincronizar(pool).catch((e) => console.error('[axtipay]', e.message));
   setFlash(
     req,
     'ok',
@@ -445,6 +568,7 @@ app.post('/clientes/:id/servicios', requireAuth, ruta(async (req, res) => {
     // Genera de una vez los recibos que ya estén dentro de su ventana de cobro
     await verificarCobrosDelDia();
   }
+  await axtipay.sincronizar(pool).catch((e) => console.error('[axtipay]', e.message));
 
   setFlash(req, 'ok', 'Servicio agregado correctamente.');
   volver();
@@ -452,7 +576,9 @@ app.post('/clientes/:id/servicios', requireAuth, ruta(async (req, res) => {
 
 app.post('/servicios/:id/eliminar', requireAuth, ruta(async (req, res) => {
   const [rows] = await pool.query('SELECT cliente_id FROM servicios_contratados WHERE id = ?', [req.params.id]);
+  await axtipay.cancelarLinks(await linksActivos({ servicioId: req.params.id }));
   await pool.query('DELETE FROM servicios_contratados WHERE id = ?', [req.params.id]);
+  await axtipay.sincronizar(pool).catch((e) => console.error('[axtipay]', e.message));
   setFlash(req, 'ok', 'Servicio eliminado.');
   res.redirect(rows[0] ? '/clientes/' + rows[0].cliente_id : '/clientes');
 }));
@@ -471,6 +597,7 @@ app.post('/servicios/:id/toggle', requireAuth, ruta(async (req, res) => {
 app.get('/recibos', requireAuth, ruta(async (req, res) => {
   const [recibos] = await pool.query(`
     SELECT r.*, c.nombre AS cliente_nombre, c.whatsapp AS cliente_whatsapp,
+           c.axtipay_cuenta_url, c.axtipay_cuenta_monto,
            s.nombre_servicio, s.tipo, s.frecuencia, s.total_parcialidades
     FROM recibos_emitidos r
     JOIN clientes c ON c.id = r.cliente_id
@@ -482,6 +609,7 @@ app.get('/recibos', requireAuth, ruta(async (req, res) => {
 
 app.post('/recibos/:id/pagar', requireAuth, ruta(async (req, res) => {
   await pool.query(`UPDATE recibos_emitidos SET estado = 'pagado' WHERE id = ?`, [req.params.id]);
+  await axtipay.sincronizar(pool).catch((e) => console.error('[axtipay]', e.message));
   setFlash(req, 'ok', 'Recibo marcado como pagado.');
   res.redirect('/recibos');
 }));
@@ -508,12 +636,14 @@ app.post('/recibos/:id/reabrir', requireAuth, ruta(async (req, res) => {
   } finally {
     conn.release();
   }
+  await axtipay.sincronizar(pool).catch((e) => console.error('[axtipay]', e.message));
   setFlash(req, 'ok', 'Recibo reabierto.');
   res.redirect('/recibos');
 }));
 
 app.post('/recibos/verificar-cobros', requireAuth, ruta(async (req, res) => {
   const resumen = await verificarCobrosDelDia();
+  await axtipay.sincronizar(pool).catch((e) => console.error('[axtipay]', e.message));
   let mensaje = `Verificación completa: ${resumen.generados} recibo(s) generado(s), ${resumen.finalizados} servicio(s) finalizado(s).`;
   if (resumen.saldoAplicado > 0) mensaje += ` Se aplicaron $${resumen.saldoAplicado.toFixed(2)} de saldo a favor.`;
   setFlash(req, 'ok', mensaje);
@@ -523,6 +653,7 @@ app.post('/recibos/verificar-cobros', requireAuth, ruta(async (req, res) => {
 // Manejo de errores general
 app.use((err, req, res, next) => {
   console.error(err);
+  if (req.path.startsWith('/api/')) return res.status(500).json({ ok: false, error: err.message });
   if (req.session) setFlash(req, 'error', 'Ocurrió un error: ' + err.message);
   res.redirect(req.headers.referer || '/clientes');
 });
@@ -535,6 +666,10 @@ async function verificacionAutomatica() {
     const r = await verificarCobrosDelDia();
     if (r.generados || r.finalizados) {
       console.log(`[auto] ${r.generados} recibo(s) generado(s), ${r.finalizados} servicio(s) finalizado(s).`);
+    }
+    const s = await axtipay.sincronizar(pool);
+    if (s.creados || s.actualizados || s.cancelados || s.errores) {
+      console.log(`[axtipay] ${s.creados} creado(s), ${s.actualizados} actualizado(s), ${s.cancelados} cancelado(s), ${s.errores} error(es).`);
     }
   } catch (err) {
     console.error('[auto] Error verificando cobros:', err.message);
