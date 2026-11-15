@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS clientes (
   direccion TEXT,
   notas TEXT,
   saldo_favor DECIMAL(10,2) NOT NULL DEFAULT 0,
+  axtipay_cuenta_url VARCHAR(255) NULL,
+  axtipay_cuenta_monto DECIMAL(10,2) NULL,
+  axtipay_seq INT NOT NULL DEFAULT 1,
   creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
@@ -55,6 +58,9 @@ CREATE TABLE IF NOT EXISTS recibos_emitidos (
   fecha_emision DATE NOT NULL,
   fecha_vencimiento DATE NULL,
   estado ENUM('pendiente', 'pagado') DEFAULT 'pendiente',
+  axtipay_url VARCHAR(255) NULL,
+  axtipay_monto DECIMAL(10,2) NULL,
+  axtipay_seq INT NOT NULL DEFAULT 1,
   CONSTRAINT fk_recibos_servicio
     FOREIGN KEY (servicio_id) REFERENCES servicios_contratados(id)
     ON DELETE CASCADE,
@@ -71,6 +77,7 @@ CREATE TABLE IF NOT EXISTS abonos_cliente (
   cliente_id INT NOT NULL,
   monto DECIMAL(10,2) NOT NULL,
   nota VARCHAR(255) NULL,
+  referencia VARCHAR(100) NULL UNIQUE,
   fecha DATE NOT NULL,
   creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_abonos_cliente

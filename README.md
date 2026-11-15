@@ -139,3 +139,37 @@ gestor-recibos/
   sesión.
 - El middleware `requireAuth` protege todas las rutas de clientes,
   servicios y recibos; solo `/login` es pública.
+
+## Integración con AxtiPay (links de pago)
+
+El gestor crea en [AxtiPay](https://pay.axti.mx) un link de pago para cada recibo pendiente, y AxtiPay le avisa al gestor cuando se paga.
+
+### Cómo funciona
+
+- **Link por recibo:** cada recibo pendiente tiene su link por el saldo que le falta (si ya tiene abonos, cobra solo el resto).
+- **Link de saldo total:** si un cliente debe 2 o más recibos, también tiene un link para pagar todo junto. Aparece en el detalle del cliente y en los mensajes de WhatsApp.
+- **Mensajes de WhatsApp:** los recordatorios que ya envías incluyen el link de pago (y el de saldo total, si aplica). En la lista de recibos hay un botón para copiar el link.
+- **Cuando se paga** (con tarjeta, o porque lo marcas pagado en AxtiPay), el gestor lo registra como **abono** con la nota "AxtiPay · forma de pago". Si se pagó el link de un recibo, se aplica a ese recibo; si se pagó el saldo total, a los recibos más antiguos primero. Si sobra, queda como saldo a favor.
+- **Si el monto cambia** (por un abono en efectivo, por ejemplo), el link se actualiza al nuevo saldo.
+- **Si un recibo deja de deberse** (lo marcas pagado aquí, o se cubre con saldo a favor), su link se cancela en AxtiPay, para que nadie pague dos veces. Si lo reabres, se crea un link nuevo.
+- La sincronización corre después de cada cambio y cada hora junto con la verificación de cobros.
+
+### Configuración
+
+1. En la base de datos ejecuta `sql/migracion_axtipay.sql` (phpMyAdmin → SQL). Se puede repetir sin problema.
+2. En AxtiPay → **Integraciones** → **Agregar integración**:
+   - Nombre: `Gestor de recibos`. Identificador: `gestor`.
+   - URL de aviso de pago: `https://pagos.axti.mx/api/axtipay/webhook`
+   - Marca **Permitir pago con tarjeta** y **Activa**, guarda y dale **Copiar clave**.
+3. En Portainer, agrega las variables de entorno del stack:
+   ```
+   AXTIPAY_URL=https://pay.axti.mx
+   AXTIPAY_INTEGRATION=gestor
+   AXTIPAY_SECRET=la_clave_que_copiaste
+   ```
+4. Vuelve a desplegar el stack. En AxtiPay → Integraciones → **Probar conexión** debe decir "Conexión correcta".
+5. En el gestor, ve a **Recibos** → **Verificar cobros del día**. Los recibos pendientes ya traen su link.
+
+Sin `AXTIPAY_SECRET` la integración queda apagada y el gestor funciona igual que antes.
+
+La ruta `/api/axtipay/webhook` debe ser accesible desde internet (por `pagos.axti.mx`). Solo acepta avisos con la firma de AxtiPay; cualquier otro se rechaza.
